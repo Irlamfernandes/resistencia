@@ -87,6 +87,7 @@ class Aplicacao(tk.Tk):
             "Cálculo da Deformação (Segmentada)",
             "Propriedades de Perfil L",
             "Propriedades de Perfil T",
+            "Propriedades de Perfil I",
             "Propriedades de Retângulo Vazado",
             "Propriedades de Círculo Vazado",
             "Propriedades de Trapézio",
@@ -109,6 +110,7 @@ class Aplicacao(tk.Tk):
             "Cálculo da Deformação (Segmentada)": ["mm", "cm", "in"],
             "Propriedades de Perfil L": ["cm", "mm", "in"],
             "Propriedades de Perfil T": ["cm", "mm", "in"],
+            "Propriedades de Perfil I": ["cm", "mm", "in"],
             "Propriedades de Retângulo Vazado": ["cm", "mm", "in"],
             "Propriedades de Círculo Vazado": ["cm", "mm", "in"],
             "Propriedades de Trapézio": ["cm", "mm", "in"],
@@ -186,6 +188,10 @@ class Aplicacao(tk.Tk):
             "Base Superior do Trapézio",
             "Base Inferior do Trapézio",
             "Altura do Trapézio",
+            "Largura da Mesa Superior (I)",
+            "Espessura da Mesa Superior (I)",
+            "Largura da Mesa Inferior (i)",
+            "Espessura da Mesa Inferior (i)",
         ]
 
         def ajustar_largura_dropdown(widget):
@@ -228,6 +234,10 @@ class Aplicacao(tk.Tk):
             "Base Superior do Trapézio": ["cm", "mm", "in"],
             "Base Inferior do Trapézio": ["cm", "mm", "in"],
             "Altura do Trapézio": ["cm", "mm", "in"],
+            "Largura da Mesa Superior (I)": ["cm", "mm", "in"],
+            "Espessura da Mesa Superior (I)": ["cm", "mm", "in"],
+            "Largura da Mesa Inferior (i)": ["cm", "mm", "in"],
+            "Espessura da Mesa Inferior (i)": ["cm", "mm", "in"],
         }
 
         def ao_selecionar_opcao(event):

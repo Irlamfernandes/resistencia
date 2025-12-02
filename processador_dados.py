@@ -9,6 +9,7 @@ from calculos import (
     calcular_deformacao_segmentada,
     calcular_propriedades_perfil_L,
     calcular_propriedades_perfil_T,
+    calcular_propriedades_perfil_I,
     calcular_propriedades_retangulo_vazado,
     calcular_propriedades_circulo_vazado,
     calcular_propriedades_trapezio
@@ -37,6 +38,8 @@ def executar_calculo(nome_calculo, conjuntos_de_campos, unidade_saida):
         return calcular_propriedades_perfil_L(dados_coletados, unidade_saida)
     elif nome_calculo == "Propriedades de Perfil T":
         return calcular_propriedades_perfil_T(dados_coletados, unidade_saida)
+    elif nome_calculo == "Propriedades de Perfil I":
+        return calcular_propriedades_perfil_I(dados_coletados, unidade_saida)
     elif nome_calculo == "Propriedades de Retângulo Vazado":
         return calcular_propriedades_retangulo_vazado(dados_coletados, unidade_saida)
     elif nome_calculo == "Propriedades de Círculo Vazado":

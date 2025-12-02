@@ -453,6 +453,116 @@ def calcular_propriedades_perfil_T(dados, unidade_saida_comprimento):
     except Exception as e:
         return f"Erro inesperado: {e}"
 
+
+def calcular_propriedades_perfil_I(dados, unidade_saida_comprimento):
+    try:
+        # Extrair dimensões do perfil I
+        B_sup_info = next((item for item in dados if item["tipo"] == "Largura da Mesa Superior (I)"), None)
+        h_sup_info = next((item for item in dados if item["tipo"] == "Espessura da Mesa Superior (I)"), None)
+        B_inf_info = next((item for item in dados if item["tipo"] == "Largura da Mesa Inferior (i)"), None)
+        h_inf_info = next((item for item in dados if item["tipo"] == "Espessura da Mesa Inferior (i)"), None)
+        H_info = next((item for item in dados if item["tipo"] == "Altura Total (H)"), None)
+        b_info = next((item for item in dados if item["tipo"] == "Espessura da Alma (b)"), None)
+
+        if not all([B_sup_info, h_sup_info, B_inf_info, h_inf_info, H_info, b_info]):
+            return "Erro: Forneça todas as 6 dimensões do perfil I."
+
+        # Converter todas as dimensões para a unidade base (metros)
+        B_sup = _converter_para_base(float(B_sup_info["valor"].replace(',', '.')), B_sup_info["unidade"], CONVERSOES_COMPRIMENTO)
+        h_sup = _converter_para_base(float(h_sup_info["valor"].replace(',', '.')), h_sup_info["unidade"], CONVERSOES_COMPRIMENTO)
+        B_inf = _converter_para_base(float(B_inf_info["valor"].replace(',', '.')), B_inf_info["unidade"], CONVERSOES_COMPRIMENTO)
+        h_inf = _converter_para_base(float(h_inf_info["valor"].replace(',', '.')), h_inf_info["unidade"], CONVERSOES_COMPRIMENTO)
+        H = _converter_para_base(float(H_info["valor"].replace(',', '.')), H_info["unidade"], CONVERSOES_COMPRIMENTO)
+        b = _converter_para_base(float(b_info["valor"].replace(',', '.')), b_info["unidade"], CONVERSOES_COMPRIMENTO)
+
+        # 1. Component Properties (Área e Centróide Local)
+        h_alma = H - h_sup - h_inf
+        B_max = max(B_sup, B_inf) # Largura máxima do perfil (para centralização)
+
+        if h_alma <= 0 or B_max <= 0 or b <= 0:
+            return "Erro: As dimensões devem ser lógicas (H > h_sup+h_inf) e positivas."
+
+        # Retângulo 1 (Mesa Superior)
+        A1 = B_sup * h_sup
+        y1 = H - h_sup / 2
+        x1 = B_max / 2 # Centrado na largura máxima
+
+        # Retângulo 2 (Alma)
+        A2 = h_alma * b
+        y2 = h_inf + h_alma / 2
+        x2 = B_max / 2 # Centrado na largura máxima
+
+        # Retângulo 3 (Mesa Inferior)
+        A3 = B_inf * h_inf
+        y3 = h_inf / 2
+        x3 = B_max / 2 # Centrado na largura máxima
+
+        A_total = A1 + A2 + A3
+
+        # 2. Centro de Gravidade (Cx, Cy)
+        # Para perfis estruturais, assumimos centralização horizontal:
+        Cx = B_max / 2 
+        # Cálculo de Cy: (A1*y1 + A2*y2 + A3*y3) / A_total
+        Cy = (A1*y1 + A2*y2 + A3*y3) / A_total
+
+        # 3. Momento de Inércia (Teorema dos Eixos Paralelos)
+        
+        # Ix (em relação ao eixo x-x no Cy)
+        Ix1 = (B_sup * h_sup**3)/12 + A1 * (y1 - Cy)**2
+        Ix2 = (b * h_alma**3)/12 + A2 * (y2 - Cy)**2
+        Ix3 = (B_inf * h_inf**3)/12 + A3 * (y3 - Cy)**2
+        Ix_total = Ix1 + Ix2 + Ix3
+
+        # Iy (em relação ao eixo y-y no Cx)
+        # O termo do eixo paralelo é zero, pois x1=x2=x3=Cx
+        Iy1 = (h_sup * B_sup**3)/12 
+        Iy2 = (h_alma * b**3)/12    
+        Iy3 = (h_inf * B_inf**3)/12 
+        Iy_total = Iy1 + Iy2 + Iy3
+
+        # 4. Raio de Giração (r = sqrt(I/A))
+        rx = math.sqrt(Ix_total / A_total)
+        ry = math.sqrt(Iy_total / A_total)
+
+        # 5. Módulo de Resistência (W = I / y)
+        # O termo de conversão para L⁴ precisa ser definido:
+        CONVERSOES_INERCIA = {'m⁴': 1.0, 'cm⁴': 1e-8, 'mm⁴': 1e-12}
+        # O termo de conversão para L³ (Volume) já estava definido:
+        conv_vol = {'m³': 1.0, 'cm³': 1e-6, 'mm³': 1e-9}
+
+        # Wx (Tensão na borda superior e inferior)
+        Wxs = Ix_total / (H - Cy) if (H - Cy) > 1e-9 else float('inf') # Mesa Superior (Top)
+        Wxi = Ix_total / Cy if Cy > 1e-9 else float('inf')             # Mesa Inferior (Bottom)
+        
+        # Wy (Tensão na borda mais distante do eixo y)
+        # Distância máxima é Cx e (B_max - Cx). Como Cx = B_max/2, são iguais.
+        dist_y = B_max / 2
+        Wyd = Iy_total / dist_y if dist_y > 1e-9 else float('inf') # Lado Direito/Esquerdo (D/E)
+        Wye = Wyd # Devido à simetria horizontal
+
+        # Formatar a saída
+        u = unidade_saida_comprimento
+        u2 = u + '²'
+        u3 = u + '³'
+        u4 = u + '⁴'
+
+        resultado = (
+            f"Área (A): {_converter_de_base(A_total, u2, CONVERSOES_AREA):.4f} {u2}\n"
+            f"Centro de Gravidade (Cx, Cy): ({_converter_de_base(Cx, u, CONVERSOES_COMPRIMENTO):.4f}, {_converter_de_base(Cy, u, CONVERSOES_COMPRIMENTO):.4f}) {u}\n"
+            f"Momento de Inércia (Ix, Iy): ({_converter_de_base(Ix_total, u4, CONVERSOES_INERCIA):.4f}, {_converter_de_base(Iy_total, u4, CONVERSOES_INERCIA):.4f}) {u4}\n"
+            f"Raio de Giração (rx, ry): ({_converter_de_base(rx, u, CONVERSOES_COMPRIMENTO):.4f}, {_converter_de_base(ry, u, CONVERSOES_COMPRIMENTO):.4f}) {u}\n"
+            f"Módulo de Resistência:\n"
+            f"  Wxs (Superior): {_converter_de_base(Wxs, u3, conv_vol):.4f} {u3} | Wxi (Inferior): {_converter_de_base(Wxi, u3, conv_vol):.4f} {u3}\n"
+            f"  Wyd (Direita): {_converter_de_base(Wyd, u3, conv_vol):.4f} {u3} | Wye (Esquerda): {_converter_de_base(Wye, u3, conv_vol):.4f} {u3}"
+        )
+        return resultado
+
+    except (ValueError, TypeError, ZeroDivisionError, KeyError) as e:
+        return f"Erro nos dados de entrada: {e}. Verifique se os valores são números e se as unidades estão corretas."
+    except Exception as e:
+        return f"Erro inesperado: {e}"
+
+
 def calcular_propriedades_retangulo_vazado(dados, unidade_saida_comprimento):
     try:
         # Extrair dimensões do retângulo vazado
