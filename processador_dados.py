@@ -12,7 +12,8 @@ from calculos import (
     calcular_propriedades_perfil_I,
     calcular_propriedades_retangulo_vazado,
     calcular_propriedades_circulo_vazado,
-    calcular_propriedades_trapezio
+    calcular_propriedades_trapezio,
+    calcular_deformacao_flexao
 )
 
 def executar_calculo(nome_calculo, conjuntos_de_campos, unidade_saida):
@@ -46,6 +47,8 @@ def executar_calculo(nome_calculo, conjuntos_de_campos, unidade_saida):
         return calcular_propriedades_circulo_vazado(dados_coletados, unidade_saida)
     elif nome_calculo == "Propriedades de Trapézio":
         return calcular_propriedades_trapezio(dados_coletados, unidade_saida)
+    elif nome_calculo == "Deformação por Flexão":
+        return calcular_deformacao_flexao(dados_coletados, unidade_saida)
     else:
         return f"Cálculo '{nome_calculo}' não implementado."
 
@@ -61,6 +64,12 @@ def _extrair_valores(conjuntos_de_campos):
                 dados_segmento = combo_opcao.master.dados_segmento
                 dados_segmento['tipo'] = 'Segmento'
                 dados_coletados.append(dados_segmento)
+        elif tipo_campo in ["Tipo de Viga", "Tipo de Seção"]:
+            dados_coletados.append({
+                "tipo": tipo_campo,
+                "valor": combo_unidade.get(), # O valor está no combobox de "unidade"
+                "unidade": "N/A"
+            })
         elif entrada_valor.get():
             dados_coletados.append({
                 "tipo": tipo_campo,

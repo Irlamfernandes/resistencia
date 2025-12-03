@@ -91,6 +91,7 @@ class Aplicacao(tk.Tk):
             "Propriedades de Retângulo Vazado",
             "Propriedades de Círculo Vazado",
             "Propriedades de Trapézio",
+            "Deformação por Flexão",
         ]
         self.combo_calculo = ttk.Combobox(controles_frame, values=opcoes_calculo, state="readonly")
         self.combo_calculo.pack(pady=(10, 15), fill="x", expand=True) 
@@ -114,6 +115,7 @@ class Aplicacao(tk.Tk):
             "Propriedades de Retângulo Vazado": ["cm", "mm", "in"],
             "Propriedades de Círculo Vazado": ["cm", "mm", "in"],
             "Propriedades de Trapézio": ["cm", "mm", "in"],
+            "Deformação por Flexão": ["mm", "cm", "in"],
         }
 
         self.combo_unidade_saida = ttk.Combobox(controles_frame, state="readonly")
@@ -192,6 +194,15 @@ class Aplicacao(tk.Tk):
             "Espessura da Mesa Superior (I)",
             "Largura da Mesa Inferior (i)",
             "Espessura da Mesa Inferior (i)",
+            # Para Deformação por Flexão
+            "Tipo de Viga",
+            "Tipo de Seção",
+            "Vão/Comprimento",
+            "Carga Concentrada",
+            "Base da Seção",
+            "Altura da Seção",
+            "Diâmetro da Seção",
+            "Momento de Inércia (I)",
         ]
 
         def ajustar_largura_dropdown(widget):
@@ -238,6 +249,13 @@ class Aplicacao(tk.Tk):
             "Espessura da Mesa Superior (I)": ["cm", "mm", "in"],
             "Largura da Mesa Inferior (i)": ["cm", "mm", "in"],
             "Espessura da Mesa Inferior (i)": ["cm", "mm", "in"],
+            # Para Deformação por Flexão
+            "Vão/Comprimento": ["m", "cm", "mm"],
+            "Carga Concentrada": ["N", "kgf", "lbf"],
+            "Base da Seção": ["cm", "mm", "in"],
+            "Altura da Seção": ["cm", "mm", "in"],
+            "Diâmetro da Seção": ["cm", "mm", "in"],
+            "Momento de Inércia (I)": ["cm⁴", "mm⁴", "m⁴"],
         }
 
         def ao_selecionar_opcao(event):
@@ -247,6 +265,19 @@ class Aplicacao(tk.Tk):
                 entrada_valor.grid_forget()
                 combo_unidade.grid_forget()
                 self.abrir_janela_segmento(frame_conjunto)
+            elif selecionado == "Tipo de Viga":
+                entrada_valor.grid_forget()
+                combo_unidade['values'] = [
+                    "Biapoiada - Carga Distribuída", "Biapoiada - Carga Concentrada",
+                    "Balanço - Carga Distribuída", "Balanço - Carga Concentrada"
+                ]
+                combo_unidade.set(combo_unidade['values'][0])
+                combo_unidade.grid(row=0, column=1, columnspan=2, padx=10, sticky="ew")
+            elif selecionado == "Tipo de Seção":
+                entrada_valor.grid_forget()
+                combo_unidade['values'] = ["Retangular", "Circular"]
+                combo_unidade.set("Retangular")
+                combo_unidade.grid(row=0, column=1, columnspan=2, padx=10, sticky="ew")
             elif selecionado in unidades:
                 entrada_valor.grid(row=0, column=1, padx=10, sticky="ew")
                 combo_unidade['values'] = unidades[selecionado]
@@ -257,7 +288,16 @@ class Aplicacao(tk.Tk):
                 combo_unidade.grid_forget()
 
         combo_opcao.bind("<<ComboboxSelected>>", ao_selecionar_opcao) 
-        
+
+        # Para os campos "Tipo de Viga" e "Tipo de Seção", o valor está no combobox de unidade
+        # e a entrada de valor não é usada. Precisamos de uma maneira de obter o valor.
+        # Vamos usar o próprio combobox de unidade como "entrada_valor" nesses casos.
+        if combo_opcao.get() in ["Tipo de Viga", "Tipo de Seção"]:
+            conjunto_widgets = (combo_opcao, combo_unidade, combo_unidade)
+        else:
+            conjunto_widgets = (combo_opcao, entrada_valor, combo_unidade)
+
+
         conjunto_widgets = (combo_opcao, entrada_valor, combo_unidade)
         self.conjuntos_de_campos.append(conjunto_widgets)
 

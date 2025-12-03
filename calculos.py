@@ -749,3 +749,112 @@ def calcular_propriedades_trapezio(dados, unidade_saida_comprimento):
         return f"Erro nos dados de entrada: {e}. Verifique todos os valores e unidades."
     except Exception as e:
         return f"Erro inesperado: {e}"
+
+def calcular_deformacao_flexao(dados, unidade_saida):
+    try:
+        # --- Extrair dados de entrada ---
+        tipo_viga_info = next((item for item in dados if item["tipo"] == "Tipo de Viga"), None)
+        vao_info = next((item for item in dados if item["tipo"] == "Vão/Comprimento"), None)
+        modulo_e_info = next((item for item in dados if item["tipo"] == "Módulo de Elasticidade"), None)
+        inercia_info = next((item for item in dados if item["tipo"] == "Momento de Inércia (I)"), None)
+        tipo_secao_info = next((item for item in dados if item["tipo"] == "Tipo de Seção"), None)
+
+        if not all([tipo_viga_info, vao_info, modulo_e_info]):
+            return "Erro: Forneça Tipo de Viga, Vão/Comprimento e Módulo de Elasticidade."
+        
+        if not inercia_info and not tipo_secao_info:
+             return "Erro: Forneça o Momento de Inércia (I) ou um Tipo de Seção para o cálculo."
+
+        # --- Converter valores para a base (SI) ---
+        tipo_viga = tipo_viga_info["valor"]
+        vao_m = _converter_para_base(float(vao_info["valor"].replace(',', '.')), vao_info["unidade"], CONVERSOES_COMPRIMENTO)
+        modulo_e_Pa = _converter_para_base(float(modulo_e_info["valor"].replace(',', '.')), modulo_e_info["unidade"], CONVERSOES_MODULO_E)
+
+        # --- Calcular Momento de Inércia (I) em m⁴ ---
+        momento_inercia_m4 = 0.0
+        info_secao_str = ""
+        
+        if inercia_info:
+            # Assumindo que a unidade de inércia terá um fator de conversão (e.g., cm⁴ para m⁴)
+            # Você precisará definir CONVERSOES_INERCIA no topo do seu arquivo
+            CONVERSOES_INERCIA = {'m⁴': 1.0, 'cm⁴': 1e-8, 'mm⁴': 1e-12}
+            momento_inercia_m4 = _converter_para_base(
+                float(inercia_info["valor"].replace(',', '.')), 
+                inercia_info["unidade"], 
+                CONVERSOES_INERCIA
+            )
+            info_secao_str = f"Inércia Fornecida: {inercia_info['valor']} {inercia_info['unidade']}"
+            # Se I foi fornecido, podemos ignorar os campos de dimensão da seção
+        
+        elif tipo_secao_info: # Apenas tenta ler o valor se o campo Tipo de Seção foi fornecido
+            tipo_secao = tipo_secao_info["valor"]   
+            if tipo_secao == "Retangular":
+                base_info = next((item for item in dados if item["tipo"] == "Base da Seção"), None)
+                altura_info = next((item for item in dados if item["tipo"] == "Altura da Seção"), None)
+                if not all([base_info, altura_info]): return "Erro: Forneça a Base e a Altura da seção retangular."
+                
+                base_m = _converter_para_base(float(base_info["valor"].replace(',', '.')), base_info["unidade"], CONVERSOES_COMPRIMENTO)
+                altura_m = _converter_para_base(float(altura_info["valor"].replace(',', '.')), altura_info["unidade"], CONVERSOES_COMPRIMENTO)
+                momento_inercia_m4 = (base_m * altura_m**3) / 12
+                info_secao_str = f"Base: {base_m*100:.2f} cm, Altura: {altura_m*100:.2f} cm"
+            elif tipo_secao == "Circular":
+                diam_info = next((item for item in dados if item["tipo"] == "Diâmetro da Seção"), None)
+                if not diam_info: return "Erro: Forneça o Diâmetro da seção circular."
+
+                diam_m = _converter_para_base(float(diam_info["valor"].replace(',', '.')), diam_info["unidade"], CONVERSOES_COMPRIMENTO)
+                momento_inercia_m4 = (math.pi * diam_m**4) / 64
+                info_secao_str = f"Diâmetro: {diam_m*100:.2f} cm"
+            else:
+                return f"Erro: Tipo de seção ('{tipo_secao}') não suportado para cálculo interno. Forneça o Momento de Inércia (I) calculado."
+
+        if momento_inercia_m4 <= 0 or modulo_e_Pa <= 0:
+            return "Erro: Momento de Inércia e Módulo de Elasticidade devem ser positivos."
+
+        # --- Calcular Deformação (flecha) em metros ---
+        deformacao_m = 0.0
+        info_carga_str = ""
+        if "Distribuída" in tipo_viga:
+            carga_info = next((item for item in dados if item["tipo"] == "Carga Distribuída"), None)
+            if not carga_info: return "Erro: Forneça o valor da Carga Distribuída."
+            carga_Nm = _converter_para_base(float(carga_info["valor"].replace(',', '.')), carga_info["unidade"], CONVERSOES_CARGA_DIST)
+            info_carga_str = f"Carga Distribuída: {carga_Nm:.2f} N/m"
+            if tipo_viga == "Biapoiada - Carga Distribuída":
+                deformacao_m = (5 * carga_Nm * vao_m**4) / (384 * modulo_e_Pa * momento_inercia_m4)
+            elif tipo_viga == "Balanço - Carga Distribuída":
+                deformacao_m = (carga_Nm * vao_m**4) / (8 * modulo_e_Pa * momento_inercia_m4)
+
+        elif "Concentrada" in tipo_viga:
+            carga_info = next((item for item in dados if item["tipo"] == "Carga Concentrada"), None)
+            if not carga_info: return "Erro: Forneça o valor da Carga Concentrada."
+            carga_N = _converter_para_base(float(carga_info["valor"].replace(',', '.')), carga_info["unidade"], CONVERSOES_FORCA)
+            info_carga_str = f"Carga Concentrada: {carga_N:.2f} N"
+            if tipo_viga == "Biapoiada - Carga Concentrada":
+                deformacao_m = (carga_N * vao_m**3) / (48 * modulo_e_Pa * momento_inercia_m4)
+            elif tipo_viga == "Balanço - Carga Concentrada":
+                deformacao_m = (carga_N * vao_m**3) / (3 * modulo_e_Pa * momento_inercia_m4)
+        else:
+            return f"Erro: Tipo de viga '{tipo_viga}' não reconhecido."
+
+        resultado_final = _converter_de_base(deformacao_m, unidade_saida, CONVERSOES_COMPRIMENTO)
+        
+        obs = "no centro do vão" if "Biapoiada" in tipo_viga else "na extremidade livre"
+        # Conversão do momento de inércia de m⁴ para cm⁴ (1 m⁴ = 1e8 cm⁴)
+        momento_inercia_cm4 = momento_inercia_m4 * 1e8
+        
+        if inercia_info:
+            return (
+                f"Deformação Máxima (Flecha): {resultado_final:.4f} {unidade_saida}\n\n"
+                f"Observação: A deformação máxima ocorre {obs}."
+            )
+        else:
+            return (
+                f"Deformação Máxima (Flecha): {resultado_final:.4f} {unidade_saida}\n\n"
+                f"--- Detalhes ---\n"
+                f"Momento de Inércia (I): {momento_inercia_cm4:.4f} cm⁴\n"
+                f"Observação: A deformação máxima ocorre {obs}."
+            )
+
+    except (ValueError, TypeError, ZeroDivisionError, KeyError) as e:
+        return f"Erro nos dados de entrada: {e}. Verifique todos os valores e unidades."
+    except Exception as e:
+        return f"Erro inesperado: {e}"
