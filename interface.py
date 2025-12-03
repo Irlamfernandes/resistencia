@@ -92,7 +92,10 @@ class Aplicacao(tk.Tk):
             "Propriedades de Círculo Vazado",
             "Propriedades de Trapézio",
             "Deformação por Flexão",
+            "Cálculo de Torção (Análise)",     
+            "Dimensionamento de Eixo (Torção)",
         ]
+        
         self.combo_calculo = ttk.Combobox(controles_frame, values=opcoes_calculo, state="readonly")
         self.combo_calculo.pack(pady=(10, 15), fill="x", expand=True) 
         self.combo_calculo.set("Selecione um cálculo") 
@@ -116,6 +119,8 @@ class Aplicacao(tk.Tk):
             "Propriedades de Círculo Vazado": ["cm", "mm", "in"],
             "Propriedades de Trapézio": ["cm", "mm", "in"],
             "Deformação por Flexão": ["mm", "cm", "in"],
+            "Cálculo de Torção (Análise)": ["kN/cm²", "MPa", "kgf/cm²", "Pa"], 
+            "Dimensionamento de Eixo (Torção)": ["cm", "mm", "m", "in"],
         }
 
         self.combo_unidade_saida = ttk.Combobox(controles_frame, state="readonly")
@@ -203,6 +208,13 @@ class Aplicacao(tk.Tk):
             "Altura da Seção",
             "Diâmetro da Seção",
             "Momento de Inércia (I)",
+
+            "Momento Torçor (Mt)",               
+            "Diâmetro Externo (D)",               
+            "Espessura do Tubo (t)",              
+            "Comprimento do Eixo (L)",            
+            "Módulo de Cisalhamento (G)",         
+            "Tensão Admissível (Cisalhamento)"
         ]
 
         def ajustar_largura_dropdown(widget):
@@ -256,6 +268,13 @@ class Aplicacao(tk.Tk):
             "Altura da Seção": ["cm", "mm", "in"],
             "Diâmetro da Seção": ["cm", "mm", "in"],
             "Momento de Inércia (I)": ["cm⁴", "mm⁴", "m⁴"],
+            
+            "Momento Torçor (Mt)": ["kN.m", "kgf.m", "N.m", "kN.cm"],
+            "Diâmetro Externo (D)": ["cm", "mm", "m"],
+            "Espessura do Tubo (t)": ["mm", "cm"],
+            "Comprimento do Eixo (L)": ["m", "cm", "mm"],
+            "Módulo de Cisalhamento (G)": ["GPa", "MPa", "kN/cm²"],
+            "Tensão Admissível (Cisalhamento)": ["kN/cm²", "MPa", "kgf/cm²"]
         }
 
         def ao_selecionar_opcao(event):
@@ -268,8 +287,11 @@ class Aplicacao(tk.Tk):
             elif selecionado == "Tipo de Viga":
                 entrada_valor.grid_forget()
                 combo_unidade['values'] = [
-                    "Biapoiada - Carga Distribuída", "Biapoiada - Carga Concentrada",
-                    "Balanço - Carga Distribuída", "Balanço - Carga Concentrada"
+                    "Biapoiada - Carga Distribuída", 
+                    "Biapoiada - Carga Concentrada",
+                    "Biengastada - Carga Distribuída",
+                    "Balanço - Carga Distribuída", 
+                    "Balanço - Carga Concentrada"
                 ]
                 combo_unidade.set(combo_unidade['values'][0])
                 combo_unidade.grid(row=0, column=1, columnspan=2, padx=10, sticky="ew")

@@ -13,6 +13,7 @@ CONVERSOES_AREA = {"m²": 1.0, "cm²": 1e-4, "mm²": 1e-6, "in²": 0.00064516} #
 CONVERSOES_COMPRIMENTO = {"m": 1.0, "cm": 0.01, "mm": 0.001, "in": 0.0254} # Base m
 CONVERSOES_MODULO_E = {"Pa": 1.0, "MPa": 1e6, "GPa": 1e9, "kgf/cm²": 1e5, "kN/cm²": 1e7} # Base Pa (Ajustado para 1 kgf/cm² = 1e5 Pa)
 CONVERSOES_CARGA_DIST = {"N/m": 1.0, "kN/m": 1000.0, "kgf/m": 10.0} # Base N/m
+CONVERSOES_TORQUE = {"N.m": 1.0, "kN.m": 1000.0, "kgf.m": 10.0, "N.cm": 0.01, "kN.cm": 10.0, "kgf.cm": 0.1} # Base N.m
 
 def calcular_forca_projeto(dados, unidade_saida):
     try:
@@ -772,21 +773,16 @@ def calcular_deformacao_flexao(dados, unidade_saida):
 
         # --- Calcular Momento de Inércia (I) em m⁴ ---
         momento_inercia_m4 = 0.0
-        info_secao_str = ""
         
         if inercia_info:
-            # Assumindo que a unidade de inércia terá um fator de conversão (e.g., cm⁴ para m⁴)
-            # Você precisará definir CONVERSOES_INERCIA no topo do seu arquivo
             CONVERSOES_INERCIA = {'m⁴': 1.0, 'cm⁴': 1e-8, 'mm⁴': 1e-12}
             momento_inercia_m4 = _converter_para_base(
                 float(inercia_info["valor"].replace(',', '.')), 
                 inercia_info["unidade"], 
                 CONVERSOES_INERCIA
             )
-            info_secao_str = f"Inércia Fornecida: {inercia_info['valor']} {inercia_info['unidade']}"
-            # Se I foi fornecido, podemos ignorar os campos de dimensão da seção
         
-        elif tipo_secao_info: # Apenas tenta ler o valor se o campo Tipo de Seção foi fornecido
+        elif tipo_secao_info:
             tipo_secao = tipo_secao_info["valor"]   
             if tipo_secao == "Retangular":
                 base_info = next((item for item in dados if item["tipo"] == "Base da Seção"), None)
@@ -796,30 +792,31 @@ def calcular_deformacao_flexao(dados, unidade_saida):
                 base_m = _converter_para_base(float(base_info["valor"].replace(',', '.')), base_info["unidade"], CONVERSOES_COMPRIMENTO)
                 altura_m = _converter_para_base(float(altura_info["valor"].replace(',', '.')), altura_info["unidade"], CONVERSOES_COMPRIMENTO)
                 momento_inercia_m4 = (base_m * altura_m**3) / 12
-                info_secao_str = f"Base: {base_m*100:.2f} cm, Altura: {altura_m*100:.2f} cm"
             elif tipo_secao == "Circular":
                 diam_info = next((item for item in dados if item["tipo"] == "Diâmetro da Seção"), None)
                 if not diam_info: return "Erro: Forneça o Diâmetro da seção circular."
 
                 diam_m = _converter_para_base(float(diam_info["valor"].replace(',', '.')), diam_info["unidade"], CONVERSOES_COMPRIMENTO)
                 momento_inercia_m4 = (math.pi * diam_m**4) / 64
-                info_secao_str = f"Diâmetro: {diam_m*100:.2f} cm"
             else:
-                return f"Erro: Tipo de seção ('{tipo_secao}') não suportado para cálculo interno. Forneça o Momento de Inércia (I) calculado."
+                return f"Erro: Tipo de seção ('{tipo_secao}') não suportado."
 
         if momento_inercia_m4 <= 0 or modulo_e_Pa <= 0:
             return "Erro: Momento de Inércia e Módulo de Elasticidade devem ser positivos."
 
         # --- Calcular Deformação (flecha) em metros ---
         deformacao_m = 0.0
-        info_carga_str = ""
+        
+        # Lógica de seleção de fórmula baseada no tipo de viga
         if "Distribuída" in tipo_viga:
             carga_info = next((item for item in dados if item["tipo"] == "Carga Distribuída"), None)
             if not carga_info: return "Erro: Forneça o valor da Carga Distribuída."
             carga_Nm = _converter_para_base(float(carga_info["valor"].replace(',', '.')), carga_info["unidade"], CONVERSOES_CARGA_DIST)
-            info_carga_str = f"Carga Distribuída: {carga_Nm:.2f} N/m"
+            
             if tipo_viga == "Biapoiada - Carga Distribuída":
                 deformacao_m = (5 * carga_Nm * vao_m**4) / (384 * modulo_e_Pa * momento_inercia_m4)
+            elif tipo_viga == "Biengastada - Carga Distribuída": # NOVO CÁLCULO (Slide 9 - PDF 12)
+                deformacao_m = (1 * carga_Nm * vao_m**4) / (384 * modulo_e_Pa * momento_inercia_m4)
             elif tipo_viga == "Balanço - Carga Distribuída":
                 deformacao_m = (carga_Nm * vao_m**4) / (8 * modulo_e_Pa * momento_inercia_m4)
 
@@ -827,7 +824,7 @@ def calcular_deformacao_flexao(dados, unidade_saida):
             carga_info = next((item for item in dados if item["tipo"] == "Carga Concentrada"), None)
             if not carga_info: return "Erro: Forneça o valor da Carga Concentrada."
             carga_N = _converter_para_base(float(carga_info["valor"].replace(',', '.')), carga_info["unidade"], CONVERSOES_FORCA)
-            info_carga_str = f"Carga Concentrada: {carga_N:.2f} N"
+            
             if tipo_viga == "Biapoiada - Carga Concentrada":
                 deformacao_m = (carga_N * vao_m**3) / (48 * modulo_e_Pa * momento_inercia_m4)
             elif tipo_viga == "Balanço - Carga Concentrada":
@@ -835,26 +832,117 @@ def calcular_deformacao_flexao(dados, unidade_saida):
         else:
             return f"Erro: Tipo de viga '{tipo_viga}' não reconhecido."
 
+        # --- Verificação de Flecha Limite (Slide 10 - PDF 12) ---
+        # Limite padrão L/350
+        limite_m = vao_m / 350
+        status_limite = "APROVADO" if deformacao_m <= limite_m else "REPROVADO"
+        
+        # Conversões finais para exibição
         resultado_final = _converter_de_base(deformacao_m, unidade_saida, CONVERSOES_COMPRIMENTO)
-        
-        obs = "no centro do vão" if "Biapoiada" in tipo_viga else "na extremidade livre"
-        # Conversão do momento de inércia de m⁴ para cm⁴ (1 m⁴ = 1e8 cm⁴)
-        momento_inercia_cm4 = momento_inercia_m4 * 1e8
-        
-        if inercia_info:
-            return (
-                f"Deformação Máxima (Flecha): {resultado_final:.4f} {unidade_saida}\n\n"
-                f"Observação: A deformação máxima ocorre {obs}."
-            )
-        else:
-            return (
-                f"Deformação Máxima (Flecha): {resultado_final:.4f} {unidade_saida}\n\n"
-                f"--- Detalhes ---\n"
-                f"Momento de Inércia (I): {momento_inercia_cm4:.4f} cm⁴\n"
-                f"Observação: A deformação máxima ocorre {obs}."
-            )
+        limite_final = _converter_de_base(limite_m, unidade_saida, CONVERSOES_COMPRIMENTO)
+        momento_inercia_cm4 = momento_inercia_m4 * 1e8 # Apenas informativo
+
+        return (
+            f"Deformação Máxima (Flecha): {resultado_final:.4f} {unidade_saida}\n"
+            f"Flecha Limite (L/350): {limite_final:.4f} {unidade_saida}\n"
+            f"Status: {status_limite}\n\n"
+            f"--- Detalhes ---\n"
+            f"Inércia Utilizada: {momento_inercia_cm4:.2f} cm⁴"
+        )
 
     except (ValueError, TypeError, ZeroDivisionError, KeyError) as e:
         return f"Erro nos dados de entrada: {e}. Verifique todos os valores e unidades."
     except Exception as e:
         return f"Erro inesperado: {e}"
+    
+def calcular_dados_torcao(dados, unidade_saida):
+    try:
+        # Extrair dados
+        torque_info = next((item for item in dados if item["tipo"] == "Momento Torçor (Mt)"), None)
+        diam_ext_info = next((item for item in dados if item["tipo"] == "Diâmetro Externo (D)"), None)
+        espessura_info = next((item for item in dados if item["tipo"] == "Espessura do Tubo (t)"), None) # Opcional (se vazado)
+        comprimento_info = next((item for item in dados if item["tipo"] == "Comprimento do Eixo (L)"), None)
+        modulo_g_info = next((item for item in dados if item["tipo"] == "Módulo de Cisalhamento (G)"), None)
+
+        if not all([torque_info, diam_ext_info]):
+            return "Erro: Forneça pelo menos Momento Torçor e Diâmetro Externo."
+
+        # Conversão para SI (Base)
+        Mt = _converter_para_base(float(torque_info["valor"].replace(',', '.')), torque_info["unidade"], CONVERSOES_TORQUE) # N.m
+        D = _converter_para_base(float(diam_ext_info["valor"].replace(',', '.')), diam_ext_info["unidade"], CONVERSOES_COMPRIMENTO) # m
+        
+        # Geometria (Maciço ou Vazado)
+        d_interno = 0.0
+        tipo_eixo = "Maciço"
+        if espessura_info and float(espessura_info["valor"].replace(',', '.')) > 0:
+            t = _converter_para_base(float(espessura_info["valor"].replace(',', '.')), espessura_info["unidade"], CONVERSOES_COMPRIMENTO)
+            d_interno = D - 2 * t
+            if d_interno <= 0: return "Erro: Espessura muito grande para o diâmetro fornecido."
+            tipo_eixo = "Vazado"
+
+        # 1. Momento Polar de Inércia (Jp)
+        # Jp = (pi * (D^4 - d^4)) / 32
+        Jp = (math.pi * (D**4 - d_interno**4)) / 32
+
+        # 2. Tensão Máxima de Cisalhamento (Tau_max)
+        # Tau = (Mt * r) / Jp, onde r = D/2
+        r = D / 2
+        Tau_max = (Mt * r) / Jp # Pascal (Pa)
+
+        # 3. Ângulo de Torção (Alpha) - Se L e G forem fornecidos
+        res_deformacao = ""
+        if comprimento_info and modulo_g_info:
+            L = _converter_para_base(float(comprimento_info["valor"].replace(',', '.')), comprimento_info["unidade"], CONVERSOES_COMPRIMENTO)
+            G = _converter_para_base(float(modulo_g_info["valor"].replace(',', '.')), modulo_g_info["unidade"], CONVERSOES_MODULO_E)
+            
+            if G > 0:
+                alpha_rad = (Mt * L) / (G * Jp)
+                alpha_graus = alpha_rad * (180 / math.pi)
+                res_deformacao = f"\nÂngulo de Torção: {alpha_rad:.6f} rad ({alpha_graus:.4f}°)"
+
+        # Formatação de Saída
+        # Jp geralmente em cm^4 ou mm^4
+        Jp_cm4 = Jp * 1e8 
+        # Tau convertido para a unidade solicitada pelo usuário (ex: MPa, kN/cm²)
+        Tau_final = _converter_de_base(Tau_max, unidade_saida, CONVERSOES_PRESSAO)
+
+        return (
+            f"Tipo de Eixo: {tipo_eixo}\n"
+            f"Momento Polar de Inércia (Jp): {Jp_cm4:.4f} cm⁴\n"
+            f"Tensão Máxima de Cisalhamento: {Tau_final:.4f} {unidade_saida}"
+            f"{res_deformacao}"
+        )
+
+    except (ValueError, TypeError, ZeroDivisionError) as e:
+        return f"Erro numérico: {e}. Verifique se os valores são válidos."
+    except Exception as e:
+        return f"Erro inesperado: {e}"
+
+def calcular_dimensionamento_torcao(dados, unidade_saida):
+    try:
+        # Fórmula do Slide 5 (Aula 13): d = 1.72 * cbrt(Mt / Tau_adm)
+        torque_info = next((item for item in dados if item["tipo"] == "Momento Torçor (Mt)"), None)
+        tensao_adm_info = next((item for item in dados if item["tipo"] == "Tensão Admissível (Cisalhamento)"), None)
+
+        if not all([torque_info, tensao_adm_info]):
+            return "Erro: Forneça Momento Torçor e Tensão Admissível."
+
+        # Conversão para SI (Base)
+        Mt = _converter_para_base(float(torque_info["valor"].replace(',', '.')), torque_info["unidade"], CONVERSOES_TORQUE) # N.m
+        Tau_adm = _converter_para_base(float(tensao_adm_info["valor"].replace(',', '.')), tensao_adm_info["unidade"], CONVERSOES_PRESSAO) # Pa
+
+        if Tau_adm <= 0: return "Erro: Tensão deve ser maior que zero."
+
+        # Cálculo Direto (Maciço)
+        # A fórmula d = 1.72 * (Mt/Tau)^(1/3) é uma simplificação de Tau = (Mt*r)/Jp para eixo maciço.
+        # Vamos usar a fórmula algébrica exata: Tau = 16*Mt / (pi * d^3) -> d = cbrt(16*Mt / (pi*Tau))
+        # 16/pi ~= 5.09. Raiz cúbica de 5.09 ~= 1.72. A fórmula do slide está correta.
+        
+        diametro_m = 1.72 * math.pow((Mt / Tau_adm), 1/3)
+        
+        res_final = _converter_de_base(diametro_m, unidade_saida, CONVERSOES_COMPRIMENTO)
+        
+        return f"Diâmetro Mínimo Necessário: {res_final:.4f} {unidade_saida}"
+
+    except Exception as e:
+        return f"Erro: {e}"

@@ -13,7 +13,9 @@ from calculos import (
     calcular_propriedades_retangulo_vazado,
     calcular_propriedades_circulo_vazado,
     calcular_propriedades_trapezio,
-    calcular_deformacao_flexao
+    calcular_deformacao_flexao,
+    calcular_dados_torcao,             
+    calcular_dimensionamento_torcao
 )
 
 def executar_calculo(nome_calculo, conjuntos_de_campos, unidade_saida):
@@ -49,6 +51,10 @@ def executar_calculo(nome_calculo, conjuntos_de_campos, unidade_saida):
         return calcular_propriedades_trapezio(dados_coletados, unidade_saida)
     elif nome_calculo == "Deformação por Flexão":
         return calcular_deformacao_flexao(dados_coletados, unidade_saida)
+    elif nome_calculo == "Cálculo de Torção (Análise)":
+        return calcular_dados_torcao(dados_coletados, unidade_saida)
+    elif nome_calculo == "Dimensionamento de Eixo (Torção)":
+        return calcular_dimensionamento_torcao(dados_coletados, unidade_saida)
     else:
         return f"Cálculo '{nome_calculo}' não implementado."
 
